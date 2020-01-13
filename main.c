@@ -24,8 +24,12 @@ main(int argc, char const * argv[])
 
     void * buf = malloc(fsize);
 
-    size_t size = fread((unsigned char *)buf, fsize, 1, fp);
-    printf("%lu\n", size);
+    if (fread((unsigned char *)buf, fsize, 1, fp) != 1)
+    {
+        printf("Failed to read data.\n");
+        return 1;
+    }
+
     fclose(fp);
 
     int offset = 0;
