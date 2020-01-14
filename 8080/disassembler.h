@@ -7,6 +7,6 @@ typedef struct instruction
     char mnemonic[255];
 } instruction_t;
 
-int disassemble(unsigned char * buf, int program_counter);
+int disassemble(unsigned char * buf, char * disassembled, int program_counter);
 
 #endif /* !DISASSEMBLER_8080_H_ */

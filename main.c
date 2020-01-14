@@ -32,10 +32,14 @@ main(int argc, char const * argv[])
 
     fclose(fp);
 
+    char disassembled[255];
+
     int offset = 0;
     while (offset < fsize)
     {
-        offset += disassemble((unsigned char *)buf, offset);
+        printf("%04X ", offset);
+        offset += disassemble((unsigned char *)buf, disassembled, offset);
+        printf("%s\n", disassembled);
     }
 
     free(buf);
