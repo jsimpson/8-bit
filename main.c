@@ -7,7 +7,7 @@ main(int argc, char const * argv[])
 {
     if (argc < 2)
     {
-        fprintf(stderr, "Please supply an executable.\n");
+        fprintf(stderr, "Please supply an 8080 ROM.\n");
         return 1;
     }
 
