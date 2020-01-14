@@ -1,2 +1,3 @@
 data/*invaders*
-disassembler-8080
+build/disassembler-8080
+build/libdisassembler-8080.so
