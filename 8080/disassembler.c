@@ -262,6 +262,7 @@ disassemble(unsigned char * buf, int program_counter)
         { 1, "CPI     #" },     // 0xFE
         { 0, "RST     7" },     // 0xFF
     };
+
     unsigned char * opcode = &buf[program_counter];
     int bytes = 1;
 
@@ -280,6 +281,7 @@ disassemble(unsigned char * buf, int program_counter)
             (*opcode == 0xFD)
        )
     {
+        // Illegal / unsupported opcode.
         printf("%02X", *opcode);
     }
     else
