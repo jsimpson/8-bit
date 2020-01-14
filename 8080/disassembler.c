@@ -42,7 +42,7 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
         { BYTE, "MVI    E,#"   }, // 0x1E
         { 0,    "RAR"          }, // 0x1F
 
-       { 0,    "NOP"          }, // 0x20
+        { 0,    "NOP"          }, // 0x20
         { WORD, "LXI    H,#"   }, // 0x21
         { WORD, "SHLD   "      }, // 0x22
         { 0,    "INX    H"     }, // 0x23
