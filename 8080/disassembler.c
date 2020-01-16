@@ -9,12 +9,12 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
     // https://pastraiser.com/cpu/i8080/i8080_opcodes.html
     static instruction_t instructions[] = {
         { 0,    "NOP",       0           }, // 0x00
-        { WORD, "LXI\tB,",   0           }, // 0x01
+        { WORD, "LXI\tB",    0           }, // 0x01
         { 0,    "STAX\tB",   0           }, // 0x02
         { 0,    "INX\tB",    0           }, // 0x03
         { 0,    "INR\tB",    0           }, // 0x04
         { 0,    "DCR\tB",    0           }, // 0x05
-        { BYTE, "MVI\tB,",   0           }, // 0x06
+        { BYTE, "MVI\tB",    0           }, // 0x06
         { 0,    "RLC",       0           }, // 0x07
         { 0,    "NOP",       0           }, // 0x08
         { 0,    "DAD\tB",    0           }, // 0x09
@@ -22,16 +22,16 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
         { 0,    "DCX\tB",    0           }, // 0x0B
         { 0,    "INR\tC",    0           }, // 0x0C
         { 0,    "DCR\tC",    0           }, // 0x0D
-        { BYTE, "MVI\tC,",   0           }, // 0x0E
+        { BYTE, "MVI\tC",    0           }, // 0x0E
         { 0,    "RRC",       0           }, // 0x0F
 
         { 0,    "NOP",       0           }, // 0x10
-        { WORD, "LXI\tD,",   0           }, // 0x11
+        { WORD, "LXI\tD",    0           }, // 0x11
         { 0,    "STAX\tD",   0           }, // 0x12
         { 0,    "INX\tD",    0           }, // 0x13
         { 0,    "INR\tD",    0           }, // 0x14
         { 0,    "DCR\tD",    0           }, // 0x15
-        { BYTE, "MVI\tD,",   0           }, // 0x16
+        { BYTE, "MVI\tD",    0           }, // 0x16
         { 0,    "RAL",       0           }, // 0x17
         { 0,    "NOP",       0           }, // 0x18
         { 0,    "DAD\tD",    0           }, // 0x19
@@ -39,16 +39,16 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
         { 0,    "DCX\tD",    0           }, // 0x1B
         { 0,    "INR\tE",    0           }, // 0x1C
         { 0,    "DCR\tE",    0           }, // 0x1D
-        { BYTE, "MVI\tE,",   0           }, // 0x1E
+        { BYTE, "MVI\tE",    0           }, // 0x1E
         { 0,    "RAR",       0           }, // 0x1F
 
         { 0,    "NOP",       0           }, // 0x20
-        { WORD, "LXI\tH,",   0           }, // 0x21
+        { WORD, "LXI\tH",    0           }, // 0x21
         { WORD, "SHLD\t",    HAS_ADDRESS }, // 0x22
         { 0,    "INX\tH",    0           }, // 0x23
         { 0,    "INR\tH",    0           }, // 0x24
         { 0,    "DCR\tH",    0           }, // 0x25
-        { BYTE, "MVI\tH,",   0           }, // 0x26
+        { BYTE, "MVI\tH",    0           }, // 0x26
         { 0,    "DAA",       0           }, // 0x27
         { 0,    "NOP",       0           }, // 0x28
         { 0,    "DAD\tH",    0           }, // 0x29
@@ -56,16 +56,16 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
         { 0,    "DCX\tH",    0           }, // 0x2B
         { 0,    "INR\tL",    0           }, // 0x2C
         { 0,    "DCR\tL",    0           }, // 0x2D
-        { BYTE, "MVI\tL,",   0           }, // 0x2E
+        { BYTE, "MVI\tL",    0           }, // 0x2E
         { 0,    "CMA",       0           }, // 0x2F
 
         { 0,    "NOP",       0           }, // 0x30
-        { WORD, "LXI\tSP,",  0           }, // 0x31
+        { WORD, "LXI\tSP",   0           }, // 0x31
         { WORD, "STA\t",     HAS_ADDRESS }, // 0x32
         { 0,    "INX\tSP",   0           }, // 0x33
         { 0,    "INR\tM",    0           }, // 0x34
         { 0,    "DCR\tM",    0           }, // 0x35
-        { BYTE, "MVI\tM,",   0           }, // 0x36
+        { BYTE, "MVI\tM",    0           }, // 0x36
         { 0,    "STC",       0           }, // 0x37
         { 0,    "NOP",       0           }, // 0x38
         { 0,    "DAD\tSP",   0           }, // 0x39
@@ -73,7 +73,7 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
         { 0,    "DCX\tSP",   0           }, // 0x3B
         { 0,    "INR\tA",    0           }, // 0x3C
         { 0,    "DCR\tA",    0           }, // 0x3D
-        { BYTE, "MVI\tA,",   0           }, // 0x3E
+        { BYTE, "MVI\tA",    0           }, // 0x3E
         { 0,    "CMC",       0           }, // 0x3F
 
         { 0,    "MOV\tB,B",  0           }, // 0x40
@@ -287,10 +287,10 @@ disassemble(unsigned char * buf, char * disassembled, int program_counter)
     switch (instructions[*opcode].size)
     {
         case BYTE:
-            sprintf(disassembled, "%s#$%02X", instructions[*opcode].mnemonic, opcode[1]);
+            sprintf(disassembled, "%s,#$%02X", instructions[*opcode].mnemonic, opcode[1]);
             break;
         case WORD:
-            sprintf(disassembled, "%s%s%02X%02X", instructions[*opcode].mnemonic, (instructions[*opcode].has_address ? "$" : "#$"), opcode[2], opcode[1]);
+            sprintf(disassembled, "%s%s%02X%02X", instructions[*opcode].mnemonic, (instructions[*opcode].has_address ? "$" : ",#$"), opcode[2], opcode[1]);
             break;
         default:
             sprintf(disassembled, "%s", instructions[*opcode].mnemonic);
