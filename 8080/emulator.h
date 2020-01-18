@@ -19,15 +19,15 @@ enum {
 
 typedef struct condition_codes
 {
-    unsigned char s:1; // sign flag
-    unsigned char z:1; // zero flag
-    unsigned char a:1; // auxillary carry flag
-    unsigned char p:1; // parity flag
-    unsigned char c:1; // carry flag
+    unsigned char s:1;  // sign flag
+    unsigned char z:1;  // zero flag
+    unsigned char ac:1; // auxillary carry flag
+    unsigned char p:1;  // parity flag
+    unsigned char cy:1; // carry flag
     unsigned char padding:3;
 } condition_codes_t;
 
-typedef struct state
+typedef struct cpu
 {
     unsigned char a;
     unsigned char b;
@@ -42,9 +42,10 @@ typedef struct state
     condition_codes_t condition_codes;
     unsigned char interrupt_enabled;
 
-} state_8080_t;
+} cpu_8080_t;
 
-void unimplemented(state_8080_t * state);
-int emulate(state_8080_t * state);
+void unimplemented(cpu_8080_t * cpu);
+int emulate(cpu_8080_t * cpu);
+void load_rom_to_memory(cpu_8080_t * cpu, const char * filename);
 
 #endif /* !EMULATOR_8080_H_ */

@@ -3,27 +3,30 @@
 #include "emulator.h"
 
 void
-die(state_8080_t * state)
+die(cpu_8080_t * cpu)
 {
     // The program counter advances ahead of any errors.
-    state->program_counter -= 1;
+    cpu->program_counter -= 1;
 
-    printf("Instructon 0x%02x\n", state->memory[state->program_counter]);
-    printf("PC         0x%04x\n", state->program_counter);
-    printf("SP         0x%04x\n", state->stack_pointer);
-    printf("IE         0x%02x\n", state->interrupt_enabled);
-    printf("A          0x%02x\n", state->a);
-    printf("B          0x%02x\n", state->b);
-    printf("C          0x%02x\n", state->c);
-    printf("D          0x%02x\n", state->d);
-    printf("E          0x%02x\n", state->e);
-    printf("H          0x%02x\n", state->h);
-    printf("L          0x%02x\n", state->l);
-    printf("sign       0x%02x\n", state->condition_codes.s);
-    printf("zero       0x%02x\n", state->condition_codes.z);
-    printf("aux carry  0x%02x\n", state->condition_codes.a);
-    printf("parity     0x%02x\n", state->condition_codes.p);
-    printf("carry      0x%02x\n", state->condition_codes.c);
+    printf("Instructon 0x%02x\n", cpu->memory[cpu->program_counter]);
+    printf("PC         0x%04x\n", cpu->program_counter);
+    printf("SP         0x%04x\n", cpu->stack_pointer);
+    printf("IE         0x%02x\n", cpu->interrupt_enabled);
+    printf("A          0x%02x\n", cpu->a);
+    printf("B          0x%02x\n", cpu->b);
+    printf("C          0x%02x\n", cpu->c);
+    printf("D          0x%02x\n", cpu->d);
+    printf("E          0x%02x\n", cpu->e);
+    printf("H          0x%02x\n", cpu->h);
+    printf("L          0x%02x\n", cpu->l);
+    printf("sign       0x%02x\n", cpu->condition_codes.s);
+    printf("zero       0x%02x\n", cpu->condition_codes.z);
+    printf("aux carry  0x%02x\n", cpu->condition_codes.ac);
+    printf("parity     0x%02x\n", cpu->condition_codes.p);
+    printf("carry      0x%02x\n", cpu->condition_codes.cy);
+
+    free(cpu->memory);
+
     exit(1);
 }
 
@@ -58,18 +61,18 @@ parity(unsigned char byte)
 
 // Load a register pair immediately.
 int
-lxi(state_8080_t * state, unsigned char rp, unsigned char * opcode)
+lxi(cpu_8080_t * cpu, unsigned char rp, unsigned char * opcode)
 {
     switch(rp)
     {
         case BC:
-            state->c = opcode[1];
-            state->b = opcode[2];
-            state->program_counter += 2;
-            printf("c: 0x%2X, b: 0x%2X\n", state->c, state->b);
+            cpu->c = opcode[1];
+            cpu->b = opcode[2];
+            cpu->program_counter += 2;
+            printf("c: 0x%2X, b: 0x%2X\n", cpu->c, cpu->b);
             break;
         default:
-            die(state);
+            die(cpu);
             break;
     }
 
@@ -77,448 +80,448 @@ lxi(state_8080_t * state, unsigned char rp, unsigned char * opcode)
 }
 
 int
-emulate(state_8080_t * state)
+emulate(cpu_8080_t * cpu)
 {
-    printf("%02X\n", state->program_counter);
-    unsigned char * opcode = &state->memory[state->program_counter];
+    printf("%02X\n", cpu->program_counter);
+    unsigned char * opcode = &cpu->memory[cpu->program_counter];
 
-    state->program_counter++;
+    cpu->program_counter++;
 
     switch(*opcode)
     {
         case 0x00: // NOP
             break;
         case 0x01: // LXI B, D16
-            lxi(state, BC, opcode);
+            lxi(cpu, BC, opcode);
             exit(0);
             break;
         case 0x02:
             {
-                unsigned short int register_pair = (state->b << 8) | (state->c);
-                state->memory[register_pair] = state->a;
+                unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
+                cpu->memory[register_pair] = cpu->a;
             }
             break;
         case 0x03:
             {
-                unsigned short int register_pair = (state->b << 8) | (state->c);
+                unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
                 register_pair += 1;
-                state->b = (register_pair & 0xFF00) >> 8;
-                state->c = register_pair & 0xFF;
+                cpu->b = (register_pair & 0xFF00) >> 8;
+                cpu->c = register_pair & 0xFF;
             }
             break;
         case 0x04:
-            state->b = state->b + 1;
-            state->condition_codes.z = ((state->b) == 0);
-            state->condition_codes.s = ((state->b & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->b);
-            state->condition_codes.a = ((state->b & 0xf) == 0xf);
+            cpu->b = cpu->b + 1;
+            cpu->condition_codes.z = ((cpu->b) == 0);
+            cpu->condition_codes.s = ((cpu->b & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->b);
+            cpu->condition_codes.ac = ((cpu->b & 0xf) == 0xf);
             break;
         case 0x05:
-            state->b = state->b - 1;
-            state->condition_codes.z = ((state->b) == 0);
-            state->condition_codes.s = ((state->b & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->b);
-            state->condition_codes.a = ((state->b & 0xf) == 0x0);
+            cpu->b = cpu->b - 1;
+            cpu->condition_codes.z = ((cpu->b) == 0);
+            cpu->condition_codes.s = ((cpu->b & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->b);
+            cpu->condition_codes.ac = ((cpu->b & 0xf) == 0x0);
             break;
         case 0x06:
-            state->b = opcode[1];
-            state->program_counter++;
+            cpu->b = opcode[1];
+            cpu->program_counter++;
             break;
         case 0x07:
             {
-                unsigned char x = state->a;
-                state-> a = ((x << 1) | (x & 0x80) >> 7);
-                state->condition_codes.c = ((x & 0x80) == 0x80);
+                unsigned char x = cpu->a;
+                cpu-> a = ((x << 1) | (x & 0x80) >> 7);
+                cpu->condition_codes.cy = ((x & 0x80) == 0x80);
             }
             break;
         case 0x09:
             {
-                unsigned int register_pair_HL = (state->h << 8) | (state->l);
-                unsigned int register_pair_BC = (state->b << 8) | (state->c);
+                unsigned int register_pair_HL = (cpu->h << 8) | (cpu->l);
+                unsigned int register_pair_BC = (cpu->b << 8) | (cpu->c);
                 register_pair_HL += register_pair_BC;
-                state->condition_codes.c = (register_pair_HL > 0xff);
-                state->h = (register_pair_HL & 0xff00) >> 8;
-                state->l = register_pair_HL & 0xff;
+                cpu->condition_codes.cy = (register_pair_HL > 0xff);
+                cpu->h = (register_pair_HL & 0xff00) >> 8;
+                cpu->l = register_pair_HL & 0xff;
             }
             break;
         case 0x0A:
             {
-                unsigned short int register_pair = (state->b << 8) | (state->c);
-                state->a = state->memory[register_pair];
+                unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
+                cpu->a = cpu->memory[register_pair];
             }
             break;
         case 0x0B:
             {
-                unsigned short int register_pair = (state->b << 8) | (state->c);
+                unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
                 register_pair -= - 1;
-                state->b = (register_pair & 0xff00) >> 8;
-                state->c = register_pair & 0xff;
+                cpu->b = (register_pair & 0xff00) >> 8;
+                cpu->c = register_pair & 0xff;
             }
             break;
         case 0x0C:
-            state->c = state->c + 1;
-            state->condition_codes.z = ((state->c) == 0);
-            state->condition_codes.s = ((state->c & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->c);
-            state->condition_codes.a = ((state->c & 0xf) == 0xf);
+            cpu->c = cpu->c + 1;
+            cpu->condition_codes.z = ((cpu->c) == 0);
+            cpu->condition_codes.s = ((cpu->c & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->c);
+            cpu->condition_codes.ac = ((cpu->c & 0xf) == 0xf);
             break;
         case 0x0D:
-            state->c = state->c - 1;
-            state->condition_codes.z = ((state->c) == 0);
-            state->condition_codes.s = ((state->c & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->c);
-            state->condition_codes.a = ((state->c & 0xf) == 0x0);
+            cpu->c = cpu->c - 1;
+            cpu->condition_codes.z = ((cpu->c) == 0);
+            cpu->condition_codes.s = ((cpu->c & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->c);
+            cpu->condition_codes.ac = ((cpu->c & 0xf) == 0x0);
             break;
         case 0x0E:
-            state->c = opcode[1];
-            state->program_counter++;
+            cpu->c = opcode[1];
+            cpu->program_counter++;
             break;
         case 0x0F:
             {
-                unsigned char x = state->a;
-                state-> a = ((x & 1) << 7 | (x >> 1));
-                state->condition_codes.c = ((x & 1) == 1);
+                unsigned char x = cpu->a;
+                cpu-> a = ((x & 1) << 7 | (x >> 1));
+                cpu->condition_codes.cy = ((x & 1) == 1);
             }
             break;
 
         case 0x11:
-            state->e = opcode[1];
-            state->d = opcode[2];
-            state->program_counter += 2;
+            cpu->e = opcode[1];
+            cpu->d = opcode[2];
+            cpu->program_counter += 2;
             break;
         case 0x12:
             {
-                unsigned short int register_pair = (state->d << 8) | (state->e);
-                state->memory[register_pair] = state->a;
+                unsigned short int register_pair = (cpu->d << 8) | (cpu->e);
+                cpu->memory[register_pair] = cpu->a;
             }
             break;
         case 0x13:
             {
-                unsigned short int register_pair = (state->d << 8) | (state->e);
+                unsigned short int register_pair = (cpu->d << 8) | (cpu->e);
                 register_pair += 1;
-                state->d = (register_pair & 0xff00) >> 8;
-                state->e = register_pair & 0xff;
+                cpu->d = (register_pair & 0xff00) >> 8;
+                cpu->e = register_pair & 0xff;
             }
             break;
         case 0x14:
-            state->d = state->d + 1;
-            state->condition_codes.z = ((state->d) == 0);
-            state->condition_codes.s = ((state->d & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->d);
-            state->condition_codes.a = ((state->d & 0xf) == 0xf);
+            cpu->d = cpu->d + 1;
+            cpu->condition_codes.z = ((cpu->d) == 0);
+            cpu->condition_codes.s = ((cpu->d & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->d);
+            cpu->condition_codes.ac = ((cpu->d & 0xf) == 0xf);
             break;
         case 0x15:
-            state->d = state->d - 1;
-            state->condition_codes.z = ((state->d) == 0);
-            state->condition_codes.s = ((state->d & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->d);
-            state->condition_codes.a = ((state->d & 0xf) == 0x0);
+            cpu->d = cpu->d - 1;
+            cpu->condition_codes.z = ((cpu->d) == 0);
+            cpu->condition_codes.s = ((cpu->d & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->d);
+            cpu->condition_codes.ac = ((cpu->d & 0xf) == 0x0);
             break;
         case 0x16:
-            state->d = opcode[1];
-            state->program_counter++;
+            cpu->d = opcode[1];
+            cpu->program_counter++;
             break;
         case 0x17:
             {
-                unsigned char x = state->a;
-                state-> a = ((x << 1) | state->condition_codes.c);
-                state->condition_codes.c = ((x & 0x80) == 0x80);
+                unsigned char x = cpu->a;
+                cpu-> a = ((x << 1) | cpu->condition_codes.cy);
+                cpu->condition_codes.cy = ((x & 0x80) == 0x80);
             }
             break;
         case 0x18: break;
         case 0x19:
             {
-                unsigned int register_pair_HL = (state->h << 8) | (state->l);
-                unsigned int register_pair_DE = (state->d << 8) | (state->e);
+                unsigned int register_pair_HL = (cpu->h << 8) | (cpu->l);
+                unsigned int register_pair_DE = (cpu->d << 8) | (cpu->e);
                 register_pair_HL += register_pair_DE;
-                state->condition_codes.c = (register_pair_HL > 0xff);
-                state->h = (register_pair_HL & 0xff00) >> 8;
-                state->l = register_pair_HL & 0xff;
+                cpu->condition_codes.cy = (register_pair_HL > 0xff);
+                cpu->h = (register_pair_HL & 0xff00) >> 8;
+                cpu->l = register_pair_HL & 0xff;
             }
             break;
         case 0x1A:
             {
-                unsigned short int register_pair = (state->d << 8) | (state->e);
-                state->a = state->memory[register_pair];
+                unsigned short int register_pair = (cpu->d << 8) | (cpu->e);
+                cpu->a = cpu->memory[register_pair];
             }
             break;
         case 0x1B:
             {
-                unsigned short int register_pair = (state->d << 8) | (state->e);
+                unsigned short int register_pair = (cpu->d << 8) | (cpu->e);
                 register_pair -= 1;
-                state->b = (register_pair & 0xff00) >> 8;
-                state->e = register_pair & 0xff;
+                cpu->b = (register_pair & 0xff00) >> 8;
+                cpu->e = register_pair & 0xff;
             }
             break;
         case 0x1C:
-            state->e = state->e + 1;
-            state->condition_codes.z = ((state->e) == 0);
-            state->condition_codes.s = ((state->e & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->e);
-            state->condition_codes.a = ((state->e & 0xf) == 0xf);
+            cpu->e = cpu->e + 1;
+            cpu->condition_codes.z = ((cpu->e) == 0);
+            cpu->condition_codes.s = ((cpu->e & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->e);
+            cpu->condition_codes.ac = ((cpu->e & 0xf) == 0xf);
             break;
         case 0x1D:
-            state->e = state->e - 1;
-            state->condition_codes.z = ((state->e) == 0);
-            state->condition_codes.s = ((state->e & 0x80) == 0x80);
-            state->condition_codes.p = parity(state->e);
-            state->condition_codes.a = ((state->e & 0xf) == 0x0);
+            cpu->e = cpu->e - 1;
+            cpu->condition_codes.z = ((cpu->e) == 0);
+            cpu->condition_codes.s = ((cpu->e & 0x80) == 0x80);
+            cpu->condition_codes.p = parity(cpu->e);
+            cpu->condition_codes.ac = ((cpu->e & 0xf) == 0x0);
             break;
         case 0x1E:
-            state->e = opcode[1];
-            state->program_counter++;
+            cpu->e = opcode[1];
+            cpu->program_counter++;
             break;
         case 0x1F:
             {
-                unsigned char x = state->a;
-                state-> a = ((state->condition_codes.c << 7) | (x >> 1));
-                state->condition_codes.c = ((x & 1) == 1);
+                unsigned char x = cpu->a;
+                cpu-> a = ((cpu->condition_codes.cy << 7) | (x >> 1));
+                cpu->condition_codes.cy = ((x & 1) == 1);
             }
             break;
 
-        case 0x20: die(state); break;
-        case 0x21: die(state); break;
-        case 0x22: die(state); break;
-        case 0x23: die(state); break;
-        case 0x24: die(state); break;
-        case 0x25: die(state); break;
-        case 0x26: die(state); break;
-        case 0x27: die(state); break;
-        case 0x28: die(state); break;
-        case 0x29: die(state); break;
-        case 0x2A: die(state); break;
-        case 0x2B: die(state); break;
-        case 0x2C: die(state); break;
-        case 0x2D: die(state); break;
-        case 0x2E: die(state); break;
-        case 0x2F: die(state); break;
+        case 0x20: die(cpu); break;
+        case 0x21: die(cpu); break;
+        case 0x22: die(cpu); break;
+        case 0x23: die(cpu); break;
+        case 0x24: die(cpu); break;
+        case 0x25: die(cpu); break;
+        case 0x26: die(cpu); break;
+        case 0x27: die(cpu); break;
+        case 0x28: die(cpu); break;
+        case 0x29: die(cpu); break;
+        case 0x2A: die(cpu); break;
+        case 0x2B: die(cpu); break;
+        case 0x2C: die(cpu); break;
+        case 0x2D: die(cpu); break;
+        case 0x2E: die(cpu); break;
+        case 0x2F: die(cpu); break;
 
-        case 0x30: die(state); break;
-        case 0x31: die(state); break;
-        case 0x32: die(state); break;
-        case 0x33: die(state); break;
-        case 0x34: die(state); break;
-        case 0x35: die(state); break;
-        case 0x36: die(state); break;
-        case 0x37: die(state); break;
-        case 0x38: die(state); break;
-        case 0x39: die(state); break;
-        case 0x3A: die(state); break;
-        case 0x3B: die(state); break;
-        case 0x3C: die(state); break;
-        case 0x3D: die(state); break;
-        case 0x3E: die(state); break;
-        case 0x3F: die(state); break;
+        case 0x30: die(cpu); break;
+        case 0x31: die(cpu); break;
+        case 0x32: die(cpu); break;
+        case 0x33: die(cpu); break;
+        case 0x34: die(cpu); break;
+        case 0x35: die(cpu); break;
+        case 0x36: die(cpu); break;
+        case 0x37: die(cpu); break;
+        case 0x38: die(cpu); break;
+        case 0x39: die(cpu); break;
+        case 0x3A: die(cpu); break;
+        case 0x3B: die(cpu); break;
+        case 0x3C: die(cpu); break;
+        case 0x3D: die(cpu); break;
+        case 0x3E: die(cpu); break;
+        case 0x3F: die(cpu); break;
 
         case 0x40:
-            state->b = state->c;
+            cpu->b = cpu->c;
             break;
         case 0x41:
-            state->b = state->d;
+            cpu->b = cpu->d;
             break;
         case 0x42:
-            state->b = state->e;
+            cpu->b = cpu->e;
             break;
-        case 0x43: die(state); break;
-        case 0x44: die(state); break;
-        case 0x45: die(state); break;
-        case 0x46: die(state); break;
-        case 0x47: die(state); break;
-        case 0x48: die(state); break;
-        case 0x49: die(state); break;
-        case 0x4A: die(state); break;
-        case 0x4B: die(state); break;
-        case 0x4C: die(state); break;
-        case 0x4D: die(state); break;
-        case 0x4E: die(state); break;
-        case 0x4F: die(state); break;
+        case 0x43: die(cpu); break;
+        case 0x44: die(cpu); break;
+        case 0x45: die(cpu); break;
+        case 0x46: die(cpu); break;
+        case 0x47: die(cpu); break;
+        case 0x48: die(cpu); break;
+        case 0x49: die(cpu); break;
+        case 0x4A: die(cpu); break;
+        case 0x4B: die(cpu); break;
+        case 0x4C: die(cpu); break;
+        case 0x4D: die(cpu); break;
+        case 0x4E: die(cpu); break;
+        case 0x4F: die(cpu); break;
 
-        case 0x50: die(state); break;
-        case 0x51: die(state); break;
-        case 0x52: die(state); break;
-        case 0x53: die(state); break;
-        case 0x54: die(state); break;
-        case 0x55: die(state); break;
-        case 0x56: die(state); break;
-        case 0x57: die(state); break;
-        case 0x58: die(state); break;
-        case 0x59: die(state); break;
-        case 0x5A: die(state); break;
-        case 0x5B: die(state); break;
-        case 0x5C: die(state); break;
-        case 0x5D: die(state); break;
-        case 0x5E: die(state); break;
-        case 0x5F: die(state); break;
+        case 0x50: die(cpu); break;
+        case 0x51: die(cpu); break;
+        case 0x52: die(cpu); break;
+        case 0x53: die(cpu); break;
+        case 0x54: die(cpu); break;
+        case 0x55: die(cpu); break;
+        case 0x56: die(cpu); break;
+        case 0x57: die(cpu); break;
+        case 0x58: die(cpu); break;
+        case 0x59: die(cpu); break;
+        case 0x5A: die(cpu); break;
+        case 0x5B: die(cpu); break;
+        case 0x5C: die(cpu); break;
+        case 0x5D: die(cpu); break;
+        case 0x5E: die(cpu); break;
+        case 0x5F: die(cpu); break;
 
-        case 0x60: die(state); break;
-        case 0x61: die(state); break;
-        case 0x62: die(state); break;
-        case 0x63: die(state); break;
-        case 0x64: die(state); break;
-        case 0x65: die(state); break;
-        case 0x66: die(state); break;
-        case 0x67: die(state); break;
-        case 0x68: die(state); break;
-        case 0x69: die(state); break;
-        case 0x6A: die(state); break;
-        case 0x6B: die(state); break;
-        case 0x6C: die(state); break;
-        case 0x6D: die(state); break;
-        case 0x6E: die(state); break;
-        case 0x6F: die(state); break;
+        case 0x60: die(cpu); break;
+        case 0x61: die(cpu); break;
+        case 0x62: die(cpu); break;
+        case 0x63: die(cpu); break;
+        case 0x64: die(cpu); break;
+        case 0x65: die(cpu); break;
+        case 0x66: die(cpu); break;
+        case 0x67: die(cpu); break;
+        case 0x68: die(cpu); break;
+        case 0x69: die(cpu); break;
+        case 0x6A: die(cpu); break;
+        case 0x6B: die(cpu); break;
+        case 0x6C: die(cpu); break;
+        case 0x6D: die(cpu); break;
+        case 0x6E: die(cpu); break;
+        case 0x6F: die(cpu); break;
 
-        case 0x70: die(state); break;
-        case 0x71: die(state); break;
-        case 0x72: die(state); break;
-        case 0x73: die(state); break;
-        case 0x74: die(state); break;
-        case 0x75: die(state); break;
-        case 0x76: die(state); break;
-        case 0x77: die(state); break;
-        case 0x78: die(state); break;
-        case 0x79: die(state); break;
-        case 0x7A: die(state); break;
-        case 0x7B: die(state); break;
-        case 0x7C: die(state); break;
-        case 0x7D: die(state); break;
-        case 0x7E: die(state); break;
-        case 0x7F: die(state); break;
+        case 0x70: die(cpu); break;
+        case 0x71: die(cpu); break;
+        case 0x72: die(cpu); break;
+        case 0x73: die(cpu); break;
+        case 0x74: die(cpu); break;
+        case 0x75: die(cpu); break;
+        case 0x76: die(cpu); break;
+        case 0x77: die(cpu); break;
+        case 0x78: die(cpu); break;
+        case 0x79: die(cpu); break;
+        case 0x7A: die(cpu); break;
+        case 0x7B: die(cpu); break;
+        case 0x7C: die(cpu); break;
+        case 0x7D: die(cpu); break;
+        case 0x7E: die(cpu); break;
+        case 0x7F: die(cpu); break;
 
-        case 0x80: die(state); break;
-        case 0x81: die(state); break;
-        case 0x82: die(state); break;
-        case 0x83: die(state); break;
-        case 0x84: die(state); break;
-        case 0x85: die(state); break;
-        case 0x86: die(state); break;
-        case 0x87: die(state); break;
-        case 0x88: die(state); break;
-        case 0x89: die(state); break;
-        case 0x8A: die(state); break;
-        case 0x8B: die(state); break;
-        case 0x8C: die(state); break;
-        case 0x8D: die(state); break;
-        case 0x8E: die(state); break;
-        case 0x8F: die(state); break;
+        case 0x80: die(cpu); break;
+        case 0x81: die(cpu); break;
+        case 0x82: die(cpu); break;
+        case 0x83: die(cpu); break;
+        case 0x84: die(cpu); break;
+        case 0x85: die(cpu); break;
+        case 0x86: die(cpu); break;
+        case 0x87: die(cpu); break;
+        case 0x88: die(cpu); break;
+        case 0x89: die(cpu); break;
+        case 0x8A: die(cpu); break;
+        case 0x8B: die(cpu); break;
+        case 0x8C: die(cpu); break;
+        case 0x8D: die(cpu); break;
+        case 0x8E: die(cpu); break;
+        case 0x8F: die(cpu); break;
 
-        case 0x90: die(state); break;
-        case 0x91: die(state); break;
-        case 0x92: die(state); break;
-        case 0x93: die(state); break;
-        case 0x94: die(state); break;
-        case 0x95: die(state); break;
-        case 0x96: die(state); break;
-        case 0x97: die(state); break;
-        case 0x98: die(state); break;
-        case 0x99: die(state); break;
-        case 0x9A: die(state); break;
-        case 0x9B: die(state); break;
-        case 0x9C: die(state); break;
-        case 0x9D: die(state); break;
-        case 0x9E: die(state); break;
-        case 0x9F: die(state); break;
+        case 0x90: die(cpu); break;
+        case 0x91: die(cpu); break;
+        case 0x92: die(cpu); break;
+        case 0x93: die(cpu); break;
+        case 0x94: die(cpu); break;
+        case 0x95: die(cpu); break;
+        case 0x96: die(cpu); break;
+        case 0x97: die(cpu); break;
+        case 0x98: die(cpu); break;
+        case 0x99: die(cpu); break;
+        case 0x9A: die(cpu); break;
+        case 0x9B: die(cpu); break;
+        case 0x9C: die(cpu); break;
+        case 0x9D: die(cpu); break;
+        case 0x9E: die(cpu); break;
+        case 0x9F: die(cpu); break;
 
-        case 0xA0: die(state); break;
-        case 0xA1: die(state); break;
-        case 0xA2: die(state); break;
-        case 0xA3: die(state); break;
-        case 0xA4: die(state); break;
-        case 0xA5: die(state); break;
-        case 0xA6: die(state); break;
-        case 0xA7: die(state); break;
-        case 0xA8: die(state); break;
-        case 0xA9: die(state); break;
-        case 0xAA: die(state); break;
-        case 0xAB: die(state); break;
-        case 0xAC: die(state); break;
-        case 0xAD: die(state); break;
-        case 0xAE: die(state); break;
-        case 0xAF: die(state); break;
+        case 0xA0: die(cpu); break;
+        case 0xA1: die(cpu); break;
+        case 0xA2: die(cpu); break;
+        case 0xA3: die(cpu); break;
+        case 0xA4: die(cpu); break;
+        case 0xA5: die(cpu); break;
+        case 0xA6: die(cpu); break;
+        case 0xA7: die(cpu); break;
+        case 0xA8: die(cpu); break;
+        case 0xA9: die(cpu); break;
+        case 0xAA: die(cpu); break;
+        case 0xAB: die(cpu); break;
+        case 0xAC: die(cpu); break;
+        case 0xAD: die(cpu); break;
+        case 0xAE: die(cpu); break;
+        case 0xAF: die(cpu); break;
 
-        case 0xB0: die(state); break;
-        case 0xB1: die(state); break;
-        case 0xB2: die(state); break;
-        case 0xB3: die(state); break;
-        case 0xB4: die(state); break;
-        case 0xB5: die(state); break;
-        case 0xB6: die(state); break;
-        case 0xB7: die(state); break;
-        case 0xB8: die(state); break;
-        case 0xB9: die(state); break;
-        case 0xBA: die(state); break;
-        case 0xBB: die(state); break;
-        case 0xBC: die(state); break;
-        case 0xBD: die(state); break;
-        case 0xBE: die(state); break;
-        case 0xBF: die(state); break;
+        case 0xB0: die(cpu); break;
+        case 0xB1: die(cpu); break;
+        case 0xB2: die(cpu); break;
+        case 0xB3: die(cpu); break;
+        case 0xB4: die(cpu); break;
+        case 0xB5: die(cpu); break;
+        case 0xB6: die(cpu); break;
+        case 0xB7: die(cpu); break;
+        case 0xB8: die(cpu); break;
+        case 0xB9: die(cpu); break;
+        case 0xBA: die(cpu); break;
+        case 0xBB: die(cpu); break;
+        case 0xBC: die(cpu); break;
+        case 0xBD: die(cpu); break;
+        case 0xBE: die(cpu); break;
+        case 0xBF: die(cpu); break;
 
-        case 0xC0: die(state); break;
-        case 0xC1: die(state); break;
-        case 0xC2: die(state); break;
-        case 0xC3: die(state); break;
-        case 0xC4: die(state); break;
-        case 0xC5: die(state); break;
-        case 0xC6: die(state); break;
-        case 0xC7: die(state); break;
-        case 0xC8: die(state); break;
-        case 0xC9: die(state); break;
-        case 0xCA: die(state); break;
-        case 0xCB: die(state); break;
-        case 0xCC: die(state); break;
-        case 0xCD: die(state); break;
-        case 0xCE: die(state); break;
-        case 0xCF: die(state); break;
+        case 0xC0: die(cpu); break;
+        case 0xC1: die(cpu); break;
+        case 0xC2: die(cpu); break;
+        case 0xC3: die(cpu); break;
+        case 0xC4: die(cpu); break;
+        case 0xC5: die(cpu); break;
+        case 0xC6: die(cpu); break;
+        case 0xC7: die(cpu); break;
+        case 0xC8: die(cpu); break;
+        case 0xC9: die(cpu); break;
+        case 0xCA: die(cpu); break;
+        case 0xCB: die(cpu); break;
+        case 0xCC: die(cpu); break;
+        case 0xCD: die(cpu); break;
+        case 0xCE: die(cpu); break;
+        case 0xCF: die(cpu); break;
 
-        case 0xD0: die(state); break;
-        case 0xD1: die(state); break;
-        case 0xD2: die(state); break;
-        case 0xD3: die(state); break;
-        case 0xD4: die(state); break;
-        case 0xD5: die(state); break;
-        case 0xD6: die(state); break;
-        case 0xD7: die(state); break;
-        case 0xD8: die(state); break;
-        case 0xD9: die(state); break;
-        case 0xDA: die(state); break;
-        case 0xDB: die(state); break;
-        case 0xDC: die(state); break;
-        case 0xDD: die(state); break;
-        case 0xDE: die(state); break;
-        case 0xDF: die(state); break;
+        case 0xD0: die(cpu); break;
+        case 0xD1: die(cpu); break;
+        case 0xD2: die(cpu); break;
+        case 0xD3: die(cpu); break;
+        case 0xD4: die(cpu); break;
+        case 0xD5: die(cpu); break;
+        case 0xD6: die(cpu); break;
+        case 0xD7: die(cpu); break;
+        case 0xD8: die(cpu); break;
+        case 0xD9: die(cpu); break;
+        case 0xDA: die(cpu); break;
+        case 0xDB: die(cpu); break;
+        case 0xDC: die(cpu); break;
+        case 0xDD: die(cpu); break;
+        case 0xDE: die(cpu); break;
+        case 0xDF: die(cpu); break;
 
-        case 0xE0: die(state); break;
-        case 0xE1: die(state); break;
-        case 0xE2: die(state); break;
-        case 0xE3: die(state); break;
-        case 0xE4: die(state); break;
-        case 0xE5: die(state); break;
-        case 0xE6: die(state); break;
-        case 0xE7: die(state); break;
-        case 0xE8: die(state); break;
-        case 0xE9: die(state); break;
-        case 0xEA: die(state); break;
-        case 0xEB: die(state); break;
-        case 0xEC: die(state); break;
-        case 0xED: die(state); break;
-        case 0xEE: die(state); break;
-        case 0xEF: die(state); break;
+        case 0xE0: die(cpu); break;
+        case 0xE1: die(cpu); break;
+        case 0xE2: die(cpu); break;
+        case 0xE3: die(cpu); break;
+        case 0xE4: die(cpu); break;
+        case 0xE5: die(cpu); break;
+        case 0xE6: die(cpu); break;
+        case 0xE7: die(cpu); break;
+        case 0xE8: die(cpu); break;
+        case 0xE9: die(cpu); break;
+        case 0xEA: die(cpu); break;
+        case 0xEB: die(cpu); break;
+        case 0xEC: die(cpu); break;
+        case 0xED: die(cpu); break;
+        case 0xEE: die(cpu); break;
+        case 0xEF: die(cpu); break;
 
-        case 0xF0: die(state); break;
-        case 0xF1: die(state); break;
-        case 0xF2: die(state); break;
-        case 0xF3: die(state); break;
-        case 0xF4: die(state); break;
-        case 0xF5: die(state); break;
-        case 0xF6: die(state); break;
-        case 0xF7: die(state); break;
-        case 0xF8: die(state); break;
-        case 0xF9: die(state); break;
-        case 0xFA: die(state); break;
-        case 0xFB: die(state); break;
-        case 0xFC: die(state); break;
-        case 0xFD: die(state); break;
-        case 0xFE: die(state); break;
-        case 0xFF: die(state); break;
+        case 0xF0: die(cpu); break;
+        case 0xF1: die(cpu); break;
+        case 0xF2: die(cpu); break;
+        case 0xF3: die(cpu); break;
+        case 0xF4: die(cpu); break;
+        case 0xF5: die(cpu); break;
+        case 0xF6: die(cpu); break;
+        case 0xF7: die(cpu); break;
+        case 0xF8: die(cpu); break;
+        case 0xF9: die(cpu); break;
+        case 0xFA: die(cpu); break;
+        case 0xFB: die(cpu); break;
+        case 0xFC: die(cpu); break;
+        case 0xFD: die(cpu); break;
+        case 0xFE: die(cpu); break;
+        case 0xFF: die(cpu); break;
     }
 
     return 1;
@@ -526,31 +529,45 @@ emulate(state_8080_t * state)
 
 #define MAX_RAM_SIZE 0x10000 // 16 kB
 
-int
-main(int argc, const char * argv[])
+void
+load_rom_to_memory(cpu_8080_t * cpu, const char * filename)
 {
-    state_8080_t * state = calloc(1,sizeof(state_8080_t));
-    state->memory = malloc(MAX_RAM_SIZE);
-
-    FILE *f = fopen("data/invaders.rom", "rb");
-    if (f==NULL)
+    FILE * fp = fopen(filename, "rb");
+    if (fp == NULL)
     {
-        printf("error: Could not open\n");
+        fprintf(stderr, "Could not open the 8080 ROM %s.\n", filename);
         exit(1);
     }
 
-    fseek(f, 0L, SEEK_END);
-    int fsize = ftell(f);
-    fseek(f, 0L, SEEK_SET);
+    fseek(fp, 0L, SEEK_END);
+    int fsize = ftell(fp);
+    fseek(fp, 0L, SEEK_SET);
 
-    unsigned char * buffer = &state->memory[0];
-    fread(buffer, fsize, 1, f);
-    fclose(f);
+    unsigned char * buffer = &cpu->memory[0];
+    fread(buffer, fsize, 1, fp);
+    fclose(fp);
+}
+
+int
+main(int argc, const char * argv[])
+{
+    if (argc < 2)
+    {
+        fprintf(stderr, "Please supply an 8080 ROM.\n");
+        return 1;
+    }
+
+    cpu_8080_t * cpu = calloc(1,sizeof(cpu_8080_t));
+    cpu->memory = malloc(MAX_RAM_SIZE);
+
+    load_rom_to_memory(cpu, argv[1]);
 
     for(;;)
     {
-        emulate(state);
+        emulate(cpu);
     }
+
+    free(cpu->memory);
 
     return 0;
 }

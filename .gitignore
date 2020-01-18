@@ -1,2 +1,3 @@
 build/*disassembler-8080*
 data/*invaders*
+**/*.out
