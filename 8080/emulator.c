@@ -7,7 +7,7 @@ void
 die(cpu_8080_t * cpu)
 {
     // The program counter advances ahead of any errors.
-    cpu->program_counter -= 1;
+    cpu->program_counter--;
 
     printf("Instructon 0x%02x\n", cpu->memory[cpu->program_counter]);
     printf("PC         0x%04x\n", cpu->program_counter);
@@ -85,56 +85,40 @@ process_condition_bits(cpu_8080_t * cpu, uint16_t value, uint8_t bits)
 
 // Increment register or memory.
 static int
-inr(cpu_8080_t * cpu, uint8_t reg)
+inr(cpu_8080_t * cpu, uint8_t * reg)
 {
-    int cycles = 5;
-    uint8_t condition_bits = ZERO_BIT | SIGN_BIT | PARITY_BIT | AUX_CARRY_BIT;
+    (*reg)++;
+    process_condition_bits(cpu, *reg, ZERO_BIT | SIGN_BIT | PARITY_BIT | AUX_CARRY_BIT);
+    return 5;
+}
 
-    switch(reg)
-    {
-        case B:
-            cpu->b = cpu->b + 1;
-            process_condition_bits(cpu, cpu->b, condition_bits);
-            break;
-        case C:
-            cpu->c = cpu->c + 1;
-            process_condition_bits(cpu, cpu->c, condition_bits);
-            break;
-        case D:
-            cpu->d = cpu->d + 1;
-            process_condition_bits(cpu, cpu->d, condition_bits);
-            break;
-        case E:
-            cpu->e = cpu->e + 1;
-            process_condition_bits(cpu, cpu->e, condition_bits);
-            break;
-        case H:
-            cpu->h = cpu->h + 1;
-            process_condition_bits(cpu, cpu->h, condition_bits);
-            break;
-        case L:
-            cpu->l = cpu->l + 1;
-            process_condition_bits(cpu, cpu->l, condition_bits);
-            break;
-        case M:
-            {
-                uint16_t address = (cpu->h << 8) | cpu->l;
-                cpu->memory[address] = cpu->memory[address] + 1;
-                process_condition_bits(cpu, cpu->memory[address], condition_bits);
-            }
+static int
+inr_m(cpu_8080_t * cpu)
+{
+    uint16_t address = (cpu->h << 8) | cpu->l;
+    cpu->memory[address] = cpu->memory[address] + 1;
+    process_condition_bits(cpu, cpu->memory[address], ZERO_BIT | SIGN_BIT | PARITY_BIT | AUX_CARRY_BIT);
 
-            cycles = 10;
-            break;
-        case A:
-            cpu->a = cpu->l + 1;
-            process_condition_bits(cpu, cpu->a, condition_bits);
-            break;
-        default:
-            die(cpu);
-            break;
-    }
+    return 10;
+}
 
-    return cycles;
+// Decrement register or memory.
+static int
+dcr(cpu_8080_t * cpu, uint8_t * reg)
+{
+    (*reg)--;
+    process_condition_bits(cpu, *reg, ZERO_BIT | SIGN_BIT | PARITY_BIT | AUX_CARRY_BIT);
+    return 5;
+}
+
+static int
+dcr_m(cpu_8080_t * cpu)
+{
+    uint16_t address = (cpu->h << 8) | cpu->l;
+    cpu->memory[address]--;
+    process_condition_bits(cpu, cpu->memory[address], ZERO_BIT | SIGN_BIT | PARITY_BIT | AUX_CARRY_BIT);
+
+    return 10;
 }
 
 /*
@@ -173,6 +157,45 @@ stax(cpu_8080_t * cpu, uint8_t rp)
  * Instructions which operate on a pair of registers.
  */
 
+// Double add.
+static int
+dad(cpu_8080_t * cpu, uint8_t rp)
+{
+
+    uint16_t data = (cpu->h << 8) | cpu->l;
+
+    switch(rp)
+    {
+        case BC:
+            {
+                uint16_t tmp = (cpu->b << 8) | cpu->c;
+                data += tmp;
+            }
+            break;
+        case DE:
+            {
+                uint16_t tmp = (cpu->d << 8) | cpu->e;
+                data += tmp;
+            }
+            break;
+        case HL:
+            data += data;
+            break;
+        case SP:
+            data += cpu->stack_pointer;
+            break;
+        default:
+            die(cpu);
+            break;
+    }
+
+    cpu->condition_codes.cy = data > 0xFF;
+    cpu->h = (data & 0xFF00) >> 8;
+    cpu->l = data & 0xFF;
+
+    return 10;
+}
+
 // Increment register pair.
 static int
 inx(cpu_8080_t * cpu, uint8_t rp)
@@ -182,7 +205,7 @@ inx(cpu_8080_t * cpu, uint8_t rp)
         case BC:
             {
                 uint16_t value = (cpu->b << 8) | cpu->c;
-                value += 1;
+                value++;
                 cpu->b = (value & 0xFF00) >> 8;
                 cpu->c = value & 0xFF;
             }
@@ -190,7 +213,7 @@ inx(cpu_8080_t * cpu, uint8_t rp)
         case DE:
             {
                 uint16_t value = (cpu->d << 8) | cpu->e;
-                value += 1;
+                value++;
                 cpu->d = (value & 0xFF00) >> 8;
                 cpu->e = value & 0xFF;
             }
@@ -198,7 +221,7 @@ inx(cpu_8080_t * cpu, uint8_t rp)
         case HL:
             {
                 uint16_t value = (cpu->h << 8) | cpu->l;
-                value += 1;
+                value++;
                 cpu->h = (value & 0xFF00) >> 8;
                 cpu->l = value & 0xFF;
             }
@@ -206,7 +229,7 @@ inx(cpu_8080_t * cpu, uint8_t rp)
         case SP:
             {
                 uint16_t value = cpu->stack_pointer;
-                value += 1;
+                value++;
                 cpu->stack_pointer = value & 0xFFFF;
             }
             break;
@@ -285,14 +308,10 @@ process_instruction(cpu_8080_t * cpu)
             cycles = inx(cpu, B);
             break;
         case 0x04:
-            cycles = inr(cpu, B);
+            cycles = inr(cpu, &cpu->b);
             break;
         case 0x05:
-            cpu->b = cpu->b - 1;
-            cpu->condition_codes.z = ((cpu->b) == 0);
-            cpu->condition_codes.s = ((cpu->b & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->b);
-            cpu->condition_codes.ac = ((cpu->b & 0xf) == 0x0);
+            cycles = dcr(cpu, &cpu->b);
             break;
         case 0x06:
             cpu->b = opcode[1];
@@ -300,9 +319,9 @@ process_instruction(cpu_8080_t * cpu)
             break;
         case 0x07:
             {
-                unsigned char x = cpu->a;
-                cpu-> a = ((x << 1) | (x & 0x80) >> 7);
-                cpu->condition_codes.cy = ((x & 0x80) == 0x80);
+                unsigned char tmp = cpu->a;
+                cpu->a = ((tmp << 1) | (tmp & 0x80) >> 7);
+                cpu->condition_codes.cy = ((tmp & 0x80) == 0x80);
             }
             break;
         case 0x09:
@@ -324,20 +343,16 @@ process_instruction(cpu_8080_t * cpu)
         case 0x0B:
             {
                 unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
-                register_pair -= - 1;
+                register_pair -= 1;
                 cpu->b = (register_pair & 0xff00) >> 8;
                 cpu->c = register_pair & 0xff;
             }
             break;
         case 0x0C:
-            cycles = inr(cpu, C);
+            cycles = inr(cpu, &cpu->c);
             break;
         case 0x0D:
-            cpu->c = cpu->c - 1;
-            cpu->condition_codes.z = ((cpu->c) == 0);
-            cpu->condition_codes.s = ((cpu->c & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->c);
-            cpu->condition_codes.ac = ((cpu->c & 0xf) == 0x0);
+            cycles = dcr(cpu, &cpu->c);
             break;
         case 0x0E:
             cpu->c = opcode[1];
@@ -366,14 +381,10 @@ process_instruction(cpu_8080_t * cpu)
             }
             break;
         case 0x14:
-            cycles = inr(cpu, D);
+            cycles = inr(cpu, &cpu->d);
             break;
         case 0x15:
-            cpu->d = cpu->d - 1;
-            cpu->condition_codes.z = ((cpu->d) == 0);
-            cpu->condition_codes.s = ((cpu->d & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->d);
-            cpu->condition_codes.ac = ((cpu->d & 0xf) == 0x0);
+            cycles = dcr(cpu, &cpu->d);
             break;
         case 0x16:
             cpu->d = opcode[1];
@@ -411,14 +422,10 @@ process_instruction(cpu_8080_t * cpu)
             }
             break;
         case 0x1C:
-            cycles = inr(cpu, E);
+            cycles = inr(cpu, &cpu->e);
             break;
         case 0x1D:
-            cpu->e = cpu->e - 1;
-            cpu->condition_codes.z = ((cpu->e) == 0);
-            cpu->condition_codes.s = ((cpu->e & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->e);
-            cpu->condition_codes.ac = ((cpu->e & 0xf) == 0x0);
+            cycles = dcr(cpu, &cpu->e);
             break;
         case 0x1E:
             cpu->e = opcode[1];
@@ -438,18 +445,22 @@ process_instruction(cpu_8080_t * cpu)
         case 0x22: die(cpu); break;
         case 0x23: die(cpu); break;
         case 0x24:
-            cycles = inr(cpu, H);
+            cycles = inr(cpu, &cpu->h);
             break;
-        case 0x25: die(cpu); break;
+        case 0x25:
+            cycles = dcr(cpu, &cpu->h);
+            break;
         case 0x26: die(cpu); break;
         case 0x27: die(cpu); break;
         case 0x29: die(cpu); break;
         case 0x2A: die(cpu); break;
         case 0x2B: die(cpu); break;
         case 0x2C:
-            cycles = inr(cpu, L);
+            cycles = inr(cpu, &cpu->l);
             break;
-        case 0x2D: die(cpu); break;
+        case 0x2D:
+            cycles = dcr(cpu, &cpu->l);
+            break;
         case 0x2E: die(cpu); break;
         case 0x2F: die(cpu); break;
 
@@ -459,18 +470,22 @@ process_instruction(cpu_8080_t * cpu)
         case 0x32: die(cpu); break;
         case 0x33: die(cpu); break;
         case 0x34:
-            cycles = inr(cpu, M);
+            cycles = inr_m(cpu);
             break;
-        case 0x35: die(cpu); break;
+        case 0x35:
+            cycles = dcr_m(cpu);
+            break;
         case 0x36: die(cpu); break;
         case 0x37: die(cpu); break;
         case 0x39: die(cpu); break;
         case 0x3A: die(cpu); break;
         case 0x3B: die(cpu); break;
         case 0x3C:
-            cycles = inr(cpu, A);
+            cycles = inr(cpu, &cpu->a);
             break;
-        case 0x3D: die(cpu); break;
+        case 0x3D:
+            cycles = dcr(cpu, &cpu->a);
+            break;
         case 0x3E: die(cpu); break;
         case 0x3F: die(cpu); break;
 
