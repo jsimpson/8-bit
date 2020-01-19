@@ -56,6 +56,88 @@ parity(int byte)
 }
 
 /*
+ * Single register instructions.
+ */
+
+void
+process_condition_bits(cpu_8080_t * cpu, uint16_t value, uint8_t bits)
+{
+    if (bits & ZERO_BIT) {
+        cpu->condition_codes.z = value == 0;
+    }
+
+    if (bits & SIGN_BIT) {
+        cpu->condition_codes.s = (value & 0x80) == 0x80;
+    }
+
+    if (bits & AUX_CARRY_BIT) {
+        cpu->condition_codes.ac = (value & 0xF) == 0xF;
+    }
+
+    if (bits & PARITY_BIT) {
+        cpu->condition_codes.p = parity(value);
+    }
+
+    if (bits & CARRY_BIT) {
+        cpu->condition_codes.cy = (value & 0x80) == 0x80;
+    }
+}
+
+// Increment register or memory.
+static int
+inr(cpu_8080_t * cpu, uint8_t reg)
+{
+    int cycles = 5;
+    uint8_t condition_bits = ZERO_BIT | SIGN_BIT | PARITY_BIT | AUX_CARRY_BIT;
+
+    switch(reg)
+    {
+        case B:
+            cpu->b = cpu->b + 1;
+            process_condition_bits(cpu, cpu->b, condition_bits);
+            break;
+        case C:
+            cpu->c = cpu->c + 1;
+            process_condition_bits(cpu, cpu->c, condition_bits);
+            break;
+        case D:
+            cpu->d = cpu->d + 1;
+            process_condition_bits(cpu, cpu->d, condition_bits);
+            break;
+        case E:
+            cpu->e = cpu->e + 1;
+            process_condition_bits(cpu, cpu->e, condition_bits);
+            break;
+        case H:
+            cpu->h = cpu->h + 1;
+            process_condition_bits(cpu, cpu->h, condition_bits);
+            break;
+        case L:
+            cpu->l = cpu->l + 1;
+            process_condition_bits(cpu, cpu->l, condition_bits);
+            break;
+        case M:
+            {
+                uint16_t address = (cpu->h << 8) | cpu->l;
+                cpu->memory[address] = cpu->memory[address] + 1;
+                process_condition_bits(cpu, cpu->memory[address], condition_bits);
+            }
+
+            cycles = 10;
+            break;
+        case A:
+            cpu->a = cpu->l + 1;
+            process_condition_bits(cpu, cpu->a, condition_bits);
+            break;
+        default:
+            die(cpu);
+            break;
+    }
+
+    return cycles;
+}
+
+/*
  * Data transfer instructions.
  * Instructions that transfer data between registers or between memory and
  * registers.
@@ -91,6 +173,7 @@ stax(cpu_8080_t * cpu, uint8_t rp)
  * Instructions which operate on a pair of registers.
  */
 
+// Increment register pair.
 static int
 inx(cpu_8080_t * cpu, uint8_t rp)
 {
@@ -109,7 +192,7 @@ inx(cpu_8080_t * cpu, uint8_t rp)
                 uint16_t value = (cpu->d << 8) | cpu->e;
                 value += 1;
                 cpu->d = (value & 0xFF00) >> 8;
-                cpu->d = value & 0xFF;
+                cpu->e = value & 0xFF;
             }
             break;
         case HL:
@@ -131,8 +214,10 @@ inx(cpu_8080_t * cpu, uint8_t rp)
             die(cpu);
             break;
     }
+
     return 5;
 }
+
 /*
  * Immediate instructions.
  * Instructions that perform operations on byte(s) which are part of the
@@ -141,49 +226,66 @@ inx(cpu_8080_t * cpu, uint8_t rp)
 
 // Load a register pair immediately.
 static int
-lxi(cpu_8080_t * cpu, uint8_t rp, uint8_t * opcode)
+lxi(cpu_8080_t * cpu, uint8_t reg, uint8_t * opcode)
 {
-    switch(rp)
+    switch(reg)
     {
-        case BC:
+        case B:
             cpu->c = opcode[1];
             cpu->b = opcode[2];
-            cpu->program_counter += 2;
+            break;
+        case D:
+            cpu->e = opcode[1];
+            cpu->d = opcode[2];
+            break;
+        case H:
+            cpu->l = opcode[1];
+            cpu->h = opcode[2];
+            break;
+        case SP:
+            cpu->stack_pointer = ((opcode[2] << 8) | opcode[1]) & 0xFFFF;
             break;
         default:
             die(cpu);
             break;
     }
 
+    cpu->program_counter += 2;
+
     return 10;
 }
 
 int
-emulate(cpu_8080_t * cpu)
+process_instruction(cpu_8080_t * cpu)
 {
+    int cycles = 0;
     uint8_t * opcode = &cpu->memory[cpu->program_counter];
 
     cpu->program_counter++;
 
     switch(*opcode)
     {
-        case 0x00: // NOP
+        case 0x00:
+        case 0x08:
+        case 0x10:
+        case 0x18:
+        case 0x20:
+        case 0x28:
+        case 0x30:
+        case 0x38:
+            return 4;
             break;
         case 0x01: // LXI B, D16
-            lxi(cpu, BC, opcode);
+            cycles = lxi(cpu, B, opcode);
             break;
         case 0x02:
-            stax(cpu, B);
+            cycles = stax(cpu, B);
             break;
         case 0x03:
-            inx(cpu, B);
+            cycles = inx(cpu, B);
             break;
         case 0x04:
-            cpu->b = cpu->b + 1;
-            cpu->condition_codes.z = ((cpu->b) == 0);
-            cpu->condition_codes.s = ((cpu->b & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->b);
-            cpu->condition_codes.ac = ((cpu->b & 0xf) == 0xf);
+            cycles = inr(cpu, B);
             break;
         case 0x05:
             cpu->b = cpu->b - 1;
@@ -228,11 +330,7 @@ emulate(cpu_8080_t * cpu)
             }
             break;
         case 0x0C:
-            cpu->c = cpu->c + 1;
-            cpu->condition_codes.z = ((cpu->c) == 0);
-            cpu->condition_codes.s = ((cpu->c & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->c);
-            cpu->condition_codes.ac = ((cpu->c & 0xf) == 0xf);
+            cycles = inr(cpu, C);
             break;
         case 0x0D:
             cpu->c = cpu->c - 1;
@@ -254,12 +352,10 @@ emulate(cpu_8080_t * cpu)
             break;
 
         case 0x11:
-            cpu->e = opcode[1];
-            cpu->d = opcode[2];
-            cpu->program_counter += 2;
+            cycles = lxi(cpu, D, opcode);
             break;
         case 0x12:
-            stax(cpu, D);
+            cycles = stax(cpu, D);
             break;
         case 0x13:
             {
@@ -270,11 +366,7 @@ emulate(cpu_8080_t * cpu)
             }
             break;
         case 0x14:
-            cpu->d = cpu->d + 1;
-            cpu->condition_codes.z = ((cpu->d) == 0);
-            cpu->condition_codes.s = ((cpu->d & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->d);
-            cpu->condition_codes.ac = ((cpu->d & 0xf) == 0xf);
+            cycles = inr(cpu, D);
             break;
         case 0x15:
             cpu->d = cpu->d - 1;
@@ -294,7 +386,6 @@ emulate(cpu_8080_t * cpu)
                 cpu->condition_codes.cy = ((x & 0x80) == 0x80);
             }
             break;
-        case 0x18: break;
         case 0x19:
             {
                 unsigned int register_pair_HL = (cpu->h << 8) | (cpu->l);
@@ -320,11 +411,7 @@ emulate(cpu_8080_t * cpu)
             }
             break;
         case 0x1C:
-            cpu->e = cpu->e + 1;
-            cpu->condition_codes.z = ((cpu->e) == 0);
-            cpu->condition_codes.s = ((cpu->e & 0x80) == 0x80);
-            cpu->condition_codes.p = parity(cpu->e);
-            cpu->condition_codes.ac = ((cpu->e & 0xf) == 0xf);
+            cycles = inr(cpu, E);
             break;
         case 0x1D:
             cpu->e = cpu->e - 1;
@@ -345,36 +432,44 @@ emulate(cpu_8080_t * cpu)
             }
             break;
 
-        case 0x20: die(cpu); break;
-        case 0x21: die(cpu); break;
+        case 0x21:
+            cycles = lxi(cpu, H, opcode);
+            break;
         case 0x22: die(cpu); break;
         case 0x23: die(cpu); break;
-        case 0x24: die(cpu); break;
+        case 0x24:
+            cycles = inr(cpu, H);
+            break;
         case 0x25: die(cpu); break;
         case 0x26: die(cpu); break;
         case 0x27: die(cpu); break;
-        case 0x28: die(cpu); break;
         case 0x29: die(cpu); break;
         case 0x2A: die(cpu); break;
         case 0x2B: die(cpu); break;
-        case 0x2C: die(cpu); break;
+        case 0x2C:
+            cycles = inr(cpu, L);
+            break;
         case 0x2D: die(cpu); break;
         case 0x2E: die(cpu); break;
         case 0x2F: die(cpu); break;
 
-        case 0x30: die(cpu); break;
-        case 0x31: die(cpu); break;
+        case 0x31:
+            cycles = lxi(cpu, SP, opcode);
+            break;
         case 0x32: die(cpu); break;
         case 0x33: die(cpu); break;
-        case 0x34: die(cpu); break;
+        case 0x34:
+            cycles = inr(cpu, M);
+            break;
         case 0x35: die(cpu); break;
         case 0x36: die(cpu); break;
         case 0x37: die(cpu); break;
-        case 0x38: die(cpu); break;
         case 0x39: die(cpu); break;
         case 0x3A: die(cpu); break;
         case 0x3B: die(cpu); break;
-        case 0x3C: die(cpu); break;
+        case 0x3C:
+            cycles = inr(cpu, A);
+            break;
         case 0x3D: die(cpu); break;
         case 0x3E: die(cpu); break;
         case 0x3F: die(cpu); break;
@@ -590,7 +685,7 @@ emulate(cpu_8080_t * cpu)
         case 0xFF: die(cpu); break;
     }
 
-    return 1;
+    return cycles;
 }
 
 #define MAX_RAM_SIZE 0x10000 // 16 kB
@@ -630,7 +725,7 @@ main(int argc, const char * argv[])
 
     for(;;)
     {
-        emulate(cpu);
+        process_instruction(cpu);
     }
 
     free(cpu->memory);

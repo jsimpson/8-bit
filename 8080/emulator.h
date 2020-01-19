@@ -1,6 +1,8 @@
 #ifndef EMULATOR_8080_H_
 #define EMULATOR_8080_H_
 
+#include <stdint.h>
+
 // Registers and register pairs.
 enum {
     B  = 0x00,
@@ -11,11 +13,21 @@ enum {
     L  = 0x05,
     M  = 0x06,
     A  = 0x07,
-    BC = 0x01,
-    DE = 0x02,
-    HL = 0x03,
-    SP = 0x04
+    BC = 0x00,
+    DE = 0x01,
+    HL = 0x02,
+    SP = 0x03
 };
+
+// Condition code (status) bits.
+enum {
+    ZERO_BIT      = 1,
+    SIGN_BIT      = 1 << 1,
+    AUX_CARRY_BIT = 1 << 2,
+    PARITY_BIT    = 1 << 3,
+    CARRY_BIT     = 1 << 4
+};
+
 
 typedef struct condition_codes
 {
@@ -44,8 +56,9 @@ typedef struct cpu
 
 } cpu_8080_t;
 
-void unimplemented(cpu_8080_t * cpu);
-int emulate(cpu_8080_t * cpu);
+void die(cpu_8080_t * cpu);
+void process_condition_bits(cpu_8080_t * cpu, uint16_t value, uint8_t bits);
+int process_instruction(cpu_8080_t * cpu);
 void load_rom_to_memory(cpu_8080_t * cpu, const char * filename);
 
 #endif /* !EMULATOR_8080_H_ */
