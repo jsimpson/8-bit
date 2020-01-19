@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "emulator.h"
@@ -34,8 +35,8 @@ die(cpu_8080_t * cpu)
  * The parity bit is set when the number of bits set in a byte are even and
  * reset when they are odd.
  */
-int
-parity(unsigned char byte)
+static int
+parity(int byte)
 {
     int parity = 0;
     byte = (byte & (1 << 7));
@@ -54,14 +55,92 @@ parity(unsigned char byte)
 }
 
 /*
+ * Data transfer instructions.
+ * Instructions that transfer data between registers or between memory and
+ * registers.
+ */
+
+// Store Accumulator.
+static int
+stax(cpu_8080_t * cpu, uint8_t rp)
+{
+    switch(rp)
+    {
+        case B:
+            {
+                uint16_t addr = (cpu->b << 8) | cpu->c;
+                cpu->memory[addr] = cpu->a;
+            }
+            break;
+        case D:
+            {
+                uint16_t addr = (cpu->d << 8) | cpu->e;
+                cpu->memory[addr] = cpu->a;
+            }
+            break;
+        default:
+            die(cpu);
+    }
+
+    return 7;
+}
+
+/*
+ * Register pair instructions.
+ * Instructions which operate on a pair of registers.
+ */
+
+static int
+inx(cpu_8080_t * cpu, uint8_t rp)
+{
+    switch(rp)
+    {
+        case BC:
+            {
+                uint16_t value = (cpu->b << 8) | cpu->c;
+                value += 1;
+                cpu->b = (value & 0xFF00) >> 8;
+                cpu->c = value & 0xFF;
+            }
+            break;
+        case DE:
+            {
+                uint16_t value = (cpu->d << 8) | cpu->e;
+                value += 1;
+                cpu->d = (value & 0xFF00) >> 8;
+                cpu->d = value & 0xFF;
+            }
+            break;
+        case HL:
+            {
+                uint16_t value = (cpu->h << 8) | cpu->l;
+                value += 1;
+                cpu->h = (value & 0xFF00) >> 8;
+                cpu->l = value & 0xFF;
+            }
+            break;
+        case SP:
+            {
+                uint16_t value = cpu->stack_pointer;
+                value += 1;
+                cpu->stack_pointer = value & 0xFFFF;
+            }
+            break;
+        default:
+            die(cpu);
+            break;
+    }
+    return 5;
+}
+/*
  * Immediate instructions.
  * Instructions that perform operations on byte(s) which are part of the
  * instruction itself.
  */
 
 // Load a register pair immediately.
-int
-lxi(cpu_8080_t * cpu, unsigned char rp, unsigned char * opcode)
+static int
+lxi(cpu_8080_t * cpu, uint8_t rp, uint8_t * opcode)
 {
     switch(rp)
     {
@@ -69,7 +148,6 @@ lxi(cpu_8080_t * cpu, unsigned char rp, unsigned char * opcode)
             cpu->c = opcode[1];
             cpu->b = opcode[2];
             cpu->program_counter += 2;
-            printf("c: 0x%2X, b: 0x%2X\n", cpu->c, cpu->b);
             break;
         default:
             die(cpu);
@@ -82,7 +160,6 @@ lxi(cpu_8080_t * cpu, unsigned char rp, unsigned char * opcode)
 int
 emulate(cpu_8080_t * cpu)
 {
-    printf("%02X\n", cpu->program_counter);
     unsigned char * opcode = &cpu->memory[cpu->program_counter];
 
     cpu->program_counter++;
@@ -93,21 +170,12 @@ emulate(cpu_8080_t * cpu)
             break;
         case 0x01: // LXI B, D16
             lxi(cpu, BC, opcode);
-            exit(0);
             break;
         case 0x02:
-            {
-                unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
-                cpu->memory[register_pair] = cpu->a;
-            }
+            stax(cpu, B);
             break;
         case 0x03:
-            {
-                unsigned short int register_pair = (cpu->b << 8) | (cpu->c);
-                register_pair += 1;
-                cpu->b = (register_pair & 0xFF00) >> 8;
-                cpu->c = register_pair & 0xFF;
-            }
+            inx(cpu, B);
             break;
         case 0x04:
             cpu->b = cpu->b + 1;
@@ -190,10 +258,7 @@ emulate(cpu_8080_t * cpu)
             cpu->program_counter += 2;
             break;
         case 0x12:
-            {
-                unsigned short int register_pair = (cpu->d << 8) | (cpu->e);
-                cpu->memory[register_pair] = cpu->a;
-            }
+            stax(cpu, D);
             break;
         case 0x13:
             {
