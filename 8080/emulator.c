@@ -27,6 +27,7 @@ die(cpu_8080_t * cpu)
     printf("carry      0x%02x\n", cpu->condition_codes.cy);
 
     free(cpu->memory);
+    free(cpu);
 
     exit(1);
 }
@@ -160,7 +161,7 @@ lxi(cpu_8080_t * cpu, uint8_t rp, uint8_t * opcode)
 int
 emulate(cpu_8080_t * cpu)
 {
-    unsigned char * opcode = &cpu->memory[cpu->program_counter];
+    uint8_t * opcode = &cpu->memory[cpu->program_counter];
 
     cpu->program_counter++;
 
@@ -622,7 +623,7 @@ main(int argc, const char * argv[])
         return 1;
     }
 
-    cpu_8080_t * cpu = calloc(1,sizeof(cpu_8080_t));
+    cpu_8080_t * cpu = calloc(1, sizeof(cpu_8080_t));
     cpu->memory = malloc(MAX_RAM_SIZE);
 
     load_rom_to_memory(cpu, argv[1]);
@@ -633,6 +634,7 @@ main(int argc, const char * argv[])
     }
 
     free(cpu->memory);
+    free(cpu);
 
     return 0;
 }
